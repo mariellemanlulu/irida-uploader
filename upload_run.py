@@ -53,6 +53,10 @@ argument_parser.add_argument('-b', '--batch',
                                   'and upload in batch. '
                                   'The list of runs is generated at start time '
                                   '(Runs added to directory mid upload will not be uploaded).')
+# Optional argument, Delay upload start time. After finding a run, wait timeout minutes before uploading
+argument_parser.add_argument('-t', '--timeout',
+                             action='store',  # This line makes it not parse a variable
+                             help='')
 
 # Optional arguments for overriding config file settings
 # Explanation:
@@ -168,7 +172,10 @@ def main():
 
     # Start Upload
     if args.batch:
-        return upload_batch(args.directory, args.force)
+        if args.timeout:
+            return upload_batch(args.directory, args.force, args.timeout)
+        else:
+            return upload_batch(args.directory, args.force)
     else:
         return upload(args.directory, args.force)
 
@@ -183,14 +190,15 @@ def upload(run_directory, force_upload):
     return core.cli_entry.upload_run_single_entry(run_directory, force_upload).exit_code
 
 
-def upload_batch(batch_directory, force_upload):
+def upload_batch(batch_directory, force_upload, timeout=None):
     """
     Start uploading runs in the batch directory
     :param batch_directory:
     :param force_upload:
+    :param timeout:
     :return: exit code 0 or 1
     """
-    return core.cli_entry.batch_upload_single_entry(batch_directory, force_upload).exit_code
+    return core.cli_entry.batch_upload_single_entry(batch_directory, force_upload, timeout).exit_code
 
 
 # This is called when the program is run for the first time

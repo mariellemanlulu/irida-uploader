@@ -1,5 +1,6 @@
 import logging
 
+from time import sleep
 from pprint import pformat
 
 import iridauploader.api as api
@@ -44,7 +45,7 @@ def upload_run_single_entry(directory, force_upload=False):
     return _validate_and_upload(directory_status)
 
 
-def batch_upload_single_entry(batch_directory, force_upload=False):
+def batch_upload_single_entry(batch_directory, force_upload=False, timeout=None):
     """
     This function acts as a single point of entry for batch uploading run directories
 
@@ -76,6 +77,13 @@ def batch_upload_single_entry(batch_directory, force_upload=False):
     else:
         upload_list = [x for x in directory_status_list if x.status_equals(DirectoryStatus.NEW)]
         logging.info("Starting upload for all new runs. {} run(s) found.".format(len(upload_list)))
+
+    if timeout:
+        timeout_mins = int(timeout)
+        while timeout_mins > 0:
+            logging.info("TIMEOUT: Upload will start in {} minutes".format(timeout_mins))
+            sleep(60)  # wait for 1 minute
+            timeout_mins = timeout_mins - 1
 
     # run upload, keep track of which directories did not upload
     error_list = []
