@@ -1,5 +1,5 @@
 import re
-from os import path, walk
+from os import path
 from collections import OrderedDict
 from copy import deepcopy
 import logging
@@ -90,47 +90,16 @@ def parse_metadata(sample_sheet_file):
     return metadata_dict
 
 
-def build_sequencing_run_from_samples(sample_sheet_file, metadata):
+def parse_sample_list(sample_sheet_file, run_data_directory, run_data_directory_file_list):
     """
-    Create a SequencingRun object with full project/sample/sequence_file structure
+    Creates a list of Sample Objects
 
-    :param sample_sheet_file:
-    :param metadata:
-    :return: SequencingRun
-    """
-    sample_list = _parse_sample_list(sample_sheet_file)
-
-    logging.debug("Building SequencingRun from parsed data")
-
-    # create list of projects and add samples to appropriate project
-    project_list = []
-    for sample in sample_list:
-        project = None
-        for p in project_list:
-            if sample.get('sample_project') == p.id:
-                project = p
-        if project is None:
-            project = model.Project(id=sample.get('sample_project'))
-            project_list.append(project)
-
-        project.add_sample(sample)
-
-    sequence_run = model.SequencingRun(metadata, project_list)
-    logging.debug("SequencingRun built")
-    return sequence_run
-
-
-def _parse_sample_list(sample_sheet_file):
-    """
-    Creates a list of all samples in the sample_sheet_file, with accompanying data/metadata
-
-    :param sample_sheet_file:
-    :return: list of samples
+    :param sample_sheet_file: Sample Sheet file
+    :param run_data_directory: Data directory including run directory (e.g. my_run/Data/Intensities/BaseCalls)
+    :param run_data_directory_file_list: The list of all files in the data directory
+    :return: list of Sample objects
     """
     sample_list = _parse_samples(sample_sheet_file)
-    sample_sheet_dir = path.dirname(sample_sheet_file)
-    base_data_dir = path.join(sample_sheet_dir, "Data", "Intensities", "BaseCalls")
-    project_dir_list = next(walk(base_data_dir))[1]  # Get the list of project directories that contain sample files
 
     for sample in sample_list:
 

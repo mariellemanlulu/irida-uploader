@@ -27,6 +27,45 @@ class Parser:
             Parser.UPLOAD_COMPLETE_FILE_NAME
         ]
 
+
+    @staticmethod
+    def get_relative_data_directory():
+        """
+        Returns path to the sequence file directory, relative to the Sample Sheet
+
+        This is not used in the application but is useful for scripting and cloud deployment
+
+        :return: a string which represents the concatenated path components, as per os.path.join
+        """
+        data_dir = os.path.join("Data", "Intensities", "BaseCalls")
+        return data_dir
+
+    @staticmethod
+    def get_nextseq_data_struct(sample_sheet):
+        """
+        Returns a NextSeqDataStruct with the directory structure and files parsed from the os
+
+        Note, this hits the os, and as such is not to be used with cloud solutions.
+        For cloud solutions, use get_relative_data_directory() and solve the actual path for your cloud environment
+
+        :param sample_sheet: Sample sheet acts as the starting point for the data directory
+        :return: NextSeqDataStruct Object
+        """
+        sample_sheet_dir = os.path.dirname(sample_sheet)
+        data_dir = os.path.join(sample_sheet_dir, Parser.get_relative_data_directory())
+
+        project_dir_list = next(os.walk(data_dir))[1]  # Get the list of project directories that contain sample files
+        nextseq_data_struct = NextSeqDataStruct(data_dir=data_dir)
+
+        for project_dir in project_dir_list:
+            project_data_dir = os.path.join(data_dir, project_dir)
+            data_dir_file_list = next(os.walk(project_data_dir))[2]
+            nextseq_data_struct.add(project_dir_name=project_dir, file_list=data_dir_file_list)
+
+        # Create a file list of the data directory, only hit the os once
+
+        return nextseq_data_struct
+
     @staticmethod
     def find_runs(directory):
         """
@@ -74,7 +113,7 @@ class Parser:
                                             "can not parse samples from this directory {}".format(directory), directory)
 
         sample_sheet_file_name = Parser.SAMPLE_SHEET_FILE_NAME
-        file_list = next(os.walk(directory))[2]  # Gets the list of files in the directory
+        file_list = common.get_file_list(directory)  # Gets the list of files in the directory
         if sample_sheet_file_name not in file_list:
             logging.error("No sample sheet file in the NextSeq format found")
             raise exceptions.DirectoryError("The directory {} has no sample sheet file in the NextSeq format"
@@ -85,15 +124,32 @@ class Parser:
             return os.path.join(directory, sample_sheet_file_name)
 
     @staticmethod
-    def get_sequencing_run(sample_sheet):
+    def get_sequencing_run(sample_sheet, run_data_directory=None, run_data_directory_file_list=None):
         """
         Does local validation on the integrety of the run directory / sample sheet
 
         Throws a ValidationError with a valadation result attached if it cannot make a sequencing run
 
-        :param sample_sheet:
+        :param sample_sheet: Sample Sheet File
+        :param run_data_directory: Optional: Directory (including run directory) to data files.
+                                   Can be provided for bypassing os calls when developing on cloud systems
+        :param run_data_directory_file_list: Optional: List of files in data directory.
+                                             Can be provided for bypassing os calls when developing on cloud systems
         :return: SequencingRun
         """
+
+        # get data directory and file list
+        validation_result = model.ValidationResult()
+
+        try:
+            if run_data_directory is None:
+                run_data_directory = Parser.get_full_data_directory(sample_sheet) #todo fix
+            if run_data_directory_file_list is None:
+                run_data_directory_file_list = common.get_file_list(run_data_directory)
+        except exceptions.DirectoryError as error:
+            validation_result.add_error(error)
+            logging.error("Errors occurred while parsing files")
+            raise exceptions.ValidationError("Errors occurred while parsing files", validation_result)
 
         # Try to get the sample sheet, validate that the sample sheet is valid
         validation_result = validation.validate_sample_sheet(sample_sheet)
@@ -112,7 +168,8 @@ class Parser:
 
         # Try to build sequencing run from sample sheet & meta data, raise validation error if errors occur
         try:
-            sequencing_run = sample_parser.build_sequencing_run_from_samples(sample_sheet, run_metadata)
+            sample_list = sample_parser.parse_sample_list(sample_sheet, run_data_directory, run_data_directory_file_list)
+            sequencing_run = common.build_sequencing_run_from_samples(sample_list, run_metadata)
         except exceptions.SequenceFileError as error:
             validation_result.add_error(error)
             logging.error("Errors occurred while building sequence run from sample sheet")
@@ -120,3 +177,34 @@ class Parser:
                                              validation_result)
 
         return sequencing_run
+
+
+class NextSeqDataStruct:
+    
+    class NextSeqDataEntry:
+        def __init__(self, project, files):
+            self._project = project
+            self._files = files
+        
+        @property
+        def project(self):
+            return self._project
+        
+        @property
+        def files(self):
+            return self._files
+
+    def __init__(self, data_dir):
+        self._projects = []
+        self._data_dir = data_dir
+    
+    @property
+    def data_dir(self):
+        return self._data_dir
+    
+    @property
+    def projects(self):
+        return self._projects
+    
+    def add(self, project_dir_name, file_list):
+        self._projects.append(self.NextSeqDataEntry(project=project_dir_name, files=file_list))

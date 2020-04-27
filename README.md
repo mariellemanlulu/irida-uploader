@@ -1,3 +1,5 @@
+I made this branch to test some stuff that didn't pan out, but I didn't want to throw out the code entirely
+
 IRIDA Uploader
 ==============
 
